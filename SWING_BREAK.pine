@@ -345,7 +345,7 @@ f_notify(string _evt, bool _isBuy, string _lv, float _ent, float _sl, float _tp,
 // 3) ช่วงวัด = Top → Low ต่ำสุด "ก่อนเบรค" (แท่ง Swing High ถึงแท่งก่อนเบรค) ; 50% = กึ่งกลางช่วง
 // 4) ราคาวิ่งลงมาแตะ 50% (แท่งหลังแท่งที่ล็อก Top) → เปิด BUY (ทิศเดิมหลังเบรค) ที่ 50%
 //    SL ใต้ Low ก่อนเบรค (± buffer) × slPct, TP = Top (High mark)
-// 5) ถ้า Swing High ใหม่ confirm ก่อนราคาลงมาแตะ 50% → ยกเลิก setup
+// 5) ถ้ามี Swing High หรือ Swing Low ใหม่ confirm (ชนิดไหนก็ได้) ก่อนราคาแตะ 50% → ยกเลิก setup ที่รออยู่ทั้งสองฝั่ง
 // ฝั่งกลับด้าน: เบรค Swing Low → ล็อก Bottom → ราคาขึ้นแตะ 50% → SELL, SL เหนือ High ก่อนเบรค, TP = Bottom
 var float lastSwH    = na
 var float lastSwL    = na
@@ -381,8 +381,10 @@ if not na(fracHighVal)
     lastSwHBar := bar_index - lbR
     swHUsed    := false   // arm: รอเบรค High นี้
     swLUsed    := true    // High confirm ก่อนเบรค Low = ยกเลิก setup เบรค Low
-    hWait      := false   // Swing High ใหม่ confirm ก่อน retest = ยกเลิก
+    hWait      := false   // confirm Swing ใหม่ (High หรือ Low) ก่อน retest = ยกเลิกทุก setup ที่รออยู่
     hTopSet    := false
+    lWait      := false
+    lTopSet    := false
 if not na(fracLowVal)
     lastSwL    := fracLowVal
     lastSwLBar := bar_index - lbR
@@ -390,6 +392,8 @@ if not na(fracLowVal)
     swHUsed    := true
     lWait      := false
     lTopSet    := false
+    hWait      := false
+    hTopSet    := false
 
 bool brkClose = brkMode == "รอแท่งปิด (Bar Close)"
 bool dayOK    = array.get(array.from(tradeSun, tradeMon, tradeTue, tradeWed, tradeThu, tradeFri, tradeSat), dayofweek(time, tz) - 1)
