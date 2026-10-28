@@ -9,7 +9,7 @@ lbL = input.int(5, title="Swing Left Bars (นับซ้ายของ Pivot)
 lbR = input.int(5, title="Swing Right Bars (นับขวา = แท่งรอ Confirm)", minval=1, maxval=50, group="1. Swing", tooltip="จำนวนแท่งฝั่งขวาที่ต้องรอก่อน Swing High / Swing Low ถูก confirm\nยิ่งน้อย Swing เกิดเร็ว แต่ Pivot หลอกมากขึ้น", display=display.none)
 
 // --- 2. Swing Break (Entry / SL / TP) --- ค่าชั่วคราว รอกำหนดกฎ entry จริง
-brkMode       = input.string("ทันทีที่ราคาทะลุ (Intrabar)", "รูปแบบ Entry", options=["ทันทีที่ราคาทะลุ (Intrabar)", "รอแท่งปิด (Bar Close)"], group="2. Swing Break (Entry/SL/TP)", display=display.none, tooltip="Intrabar = เปิดทันทีที่ไส้แท่งทะลุ Swing, Entry อยู่ที่ระดับ Swing พอดี (repaint ระหว่างแท่ง)\nBar Close = รอแท่งปิดเหนือ/ใต้ Swing แล้วเปิดที่ราคาปิด — ไม่ repaint, สถิติใกล้เคียงการเทรดจริงกว่า (ไม่เช็ค TP/SL ในแท่งที่เปิด)")
+brkMode       = input.string("ทันทีที่ราคาทะลุ (Intrabar)", "รูปแบบ Entry", options=["ทันทีที่ราคาทะลุ (Intrabar)", "รอแท่งปิด (Bar Close)"], group="2. Swing Break (Entry/SL/TP)", display=display.none, tooltip="Intrabar = เปิดทันทีที่ไส้แท่งทะลุ Swing, Entry อยู่ที่ระดับ Swing พอดี (repaint ระหว่างแท่ง)\nBar Close = ไส้แท่งทะลุ Swing (ไม่สนว่าแท่งจะปิดเหนือ/ใต้ระดับหรือไม่) แล้วรอแท่งปิด เปิดที่ราคาปิด — ไม่ repaint, สถิติใกล้เคียงการเทรดจริงกว่า (ไม่เช็ค TP/SL ในแท่งที่เปิด)")
 slPct         = input.float(100.0, title="  SL = กี่ % ของระยะ Entry→จุดต่ำสุด/สูงสุดในช่วง Swing→เบรค", minval=1.0, maxval=1000.0, step=1.0, group="2. Swing Break (Entry/SL/TP)", display=display.none, tooltip="BUY: ระยะ = Entry ถึงราคาต่ำสุดตั้งแต่แท่ง Swing High จนถึงแท่งที่เบรค (SELL กลับด้าน)\n100 = SL ที่จุดสุดขั้วนั้น (± buffer)\n50 = SL ครึ่งหนึ่งของระยะนั้น (ใกล้ Entry ขึ้น)\nTP คิดจากระยะ SL ที่ปรับแล้ว (tpRR × ระยะ SL)")
 slBufferPts   = input.float(0.0, title="  SL buffer (จุดราคา) นอก Swing ฝั่งตรงข้าม", minval=0.0, step=0.01, group="2. Swing Break (Entry/SL/TP)", display=display.none)
 tpRR          = input.float(2.0, title="  TP (เท่าของระยะ SL)", minval=0.1, step=0.1, group="2. Swing Break (Entry/SL/TP)", display=display.none, tooltip="2.0 = TP ไกล 2 เท่าของระยะ Entry→SL")
@@ -367,7 +367,7 @@ bool brkClose = brkMode == "รอแท่งปิด (Bar Close)"
 bool dayOK    = array.get(array.from(tradeSun, tradeMon, tradeTue, tradeWed, tradeThu, tradeFri, tradeSat), dayofweek(time, tz) - 1)
 
 // --- BUY: เบรค Swing High ---
-if dayOK and not swHUsed and not na(lastSwL) and (brkClose ? (close > lastSwH and barstate.isconfirmed) : high > lastSwH)
+if dayOK and not swHUsed and not na(lastSwL) and (brkClose ? (high > lastSwH and barstate.isconfirmed) : high > lastSwH)
     swHUsed := true
     float fillB = brkClose ? close : lastSwH
     // ระยะอ้างอิง SL = Entry → ราคาต่ำสุดในช่วง แท่ง Swing High ถึงแท่งที่เบรค
@@ -407,7 +407,7 @@ if dayOK and not swHUsed and not na(lastSwL) and (brkClose ? (close > lastSwH an
         f_drawEntryMarker(true, fillB, tpB, slB, "Break ↑")
 
 // --- SELL: เบรค Swing Low ---
-if dayOK and not swLUsed and not na(lastSwH) and (brkClose ? (close < lastSwL and barstate.isconfirmed) : low < lastSwL)
+if dayOK and not swLUsed and not na(lastSwH) and (brkClose ? (low < lastSwL and barstate.isconfirmed) : low < lastSwL)
     swLUsed := true
     float fillS = brkClose ? close : lastSwL
     // ระยะอ้างอิง SL = Entry → ราคาสูงสุดในช่วง แท่ง Swing Low ถึงแท่งที่เบรค
