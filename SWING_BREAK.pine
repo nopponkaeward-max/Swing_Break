@@ -342,7 +342,7 @@ f_notify(string _evt, bool _isBuy, string _lv, float _ent, float _sl, float _tp,
 // 1) Swing High confirm แล้วราคาเบรค High นั้น (ก่อน Swing Low ใหม่ confirm) → "ไม่เข้า" ตอนเบรค
 // 2) หลังเบรค ราคาวิ่งต่อ จนมีแท่งที่ไส้ลงมาต่ำกว่าระดับ Swing High ที่ถูกเบรค (แท่งหลังแท่งเบรค)
 //    → ล็อก High สูงสุดตั้งแต่เบรคถึงตอนนี้เป็น "Top"
-// 3) ช่วงวัด = Top → Low ต่ำสุดตั้งแต่แท่ง Swing High ถึงแท่ง Top ; 50% = กึ่งกลางช่วง
+// 3) ช่วงวัด = Top → Low ต่ำสุด "ก่อนเบรค" (แท่ง Swing High ถึงแท่งก่อนเบรค) ; 50% = กึ่งกลางช่วง
 // 4) ราคาวิ่งลงมาแตะ 50% (แท่งหลังแท่งที่ล็อก Top) → เปิด SELL ที่ 50%
 //    SL เหนือ Top (± buffer) × slPct, TP = Swing Low ล่าสุดก่อนเกิด Swing High
 // 5) ถ้า Swing High ใหม่ confirm ก่อนราคาลงมาแตะ 50% → ยกเลิก setup
@@ -363,6 +363,7 @@ var int   hPeakBar   = na
 var int   hSwBar     = na
 var float hTP        = na     // Swing Low ล่าสุดก่อนเกิด High
 var float hMid       = na
+var float hBase      = na     // Low ต่ำสุดก่อนเบรค (แท่ง Swing High → แท่งก่อนเบรค)
 var int   hBrkBar    = na
 var int   hLockBar   = na
 var float lLvl       = na
@@ -371,6 +372,7 @@ var int   lPeakBar   = na
 var int   lSwBar     = na
 var float lTP        = na
 var float lMid       = na
+var float lBase      = na     // High สูงสุดก่อนเบรค
 var int   lBrkBar    = na
 var int   lLockBar   = na
 
@@ -401,6 +403,10 @@ if not swHUsed and high > lastSwH
     hPeak    := high
     hPeakBar := bar_index
     hSwBar   := lastSwHBar
+    float baseLowB = low[1]
+    for k = 2 to math.min(bar_index - lastSwHBar, 900)
+        baseLowB := math.min(baseLowB, low[k])
+    hBase    := baseLowB
     hTP      := lastSwL
     hBrkBar  := bar_index
     if showBreakLine
@@ -415,6 +421,10 @@ if not swLUsed and low < lastSwL
     lPeak    := low
     lPeakBar := bar_index
     lSwBar   := lastSwLBar
+    float baseHighS = high[1]
+    for k = 2 to math.min(bar_index - lastSwLBar, 900)
+        baseHighS := math.max(baseHighS, high[k])
+    lBase    := baseHighS
     lTP      := lastSwH
     lBrkBar  := bar_index
     if showBreakLine
@@ -428,10 +438,7 @@ if hWait and not hTopSet and bar_index > hBrkBar
     if low < hLvl
         hTopSet  := true
         hLockBar := bar_index
-        float refLowT = low[bar_index - hPeakBar]
-        for k = (bar_index - hPeakBar) to math.min(bar_index - hSwBar, 900)
-            refLowT := math.min(refLowT, low[k])
-        hMid := hPeak - 0.5 * (hPeak - refLowT)
+        hMid := hPeak - 0.5 * (hPeak - hBase)
         if showBreakLine
             regLine(line.new(hPeakBar, hPeak, bar_index + 10, hPeak, color=color.new(color.red, 30), width=1, style=line.style_dotted))
             regLine(line.new(hSwBar, hMid, bar_index + 10, hMid, color=color.new(color.orange, 20), width=1, style=line.style_dotted))
@@ -442,10 +449,7 @@ if lWait and not lTopSet and bar_index > lBrkBar
     if high > lLvl
         lTopSet  := true
         lLockBar := bar_index
-        float refHighT = high[bar_index - lPeakBar]
-        for k = (bar_index - lPeakBar) to math.min(bar_index - lSwBar, 900)
-            refHighT := math.max(refHighT, high[k])
-        lMid := lPeak + 0.5 * (refHighT - lPeak)
+        lMid := lPeak + 0.5 * (lBase - lPeak)
         if showBreakLine
             regLine(line.new(lPeakBar, lPeak, bar_index + 10, lPeak, color=color.new(color.green, 30), width=1, style=line.style_dotted))
             regLine(line.new(lSwBar, lMid, bar_index + 10, lMid, color=color.new(color.orange, 20), width=1, style=line.style_dotted))
