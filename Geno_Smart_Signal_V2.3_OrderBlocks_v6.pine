@@ -1,0 +1,802 @@
+//@version=6
+indicator("Geno Smart Signal V2.3 Orderblocks", overlay = true, max_labels_count = 500, max_lines_count = 500, max_boxes_count = 100, max_bars_back = 1000)
+
+// ===============================================================================================
+// INPUTS
+// ===============================================================================================
+
+// ----- Smart Trail -----
+gST            = "Smart Trail"
+ShowSmartTrail = input.bool(true, "Smart Trail", group = gST)
+trailType      = input.string("modified", "Trail type", options = ["modified", "unmodified"], group = gST)
+ATRPeriod      = input.int(200, "ATR Period", minval = 1, group = gST)
+ATRFactor      = input.float(4.2, "ATR Factor", minval = 2, maxval = 26, step = 0.1, tooltip = "Changes the sensitivity of the signals.", group = gST)
+Smoothing      = input.int(4, "Smoothing", minval = 1, group = gST)
+
+// ----- Support & Resistance -----
+gSR        = "🧊 Support and Resistances"
+enableSR   = input.bool(false, "SR On/Off", group = gSR)
+colorSup   = input.color(color.new(#00DBFF, 20), "Support Color", group = gSR)
+colorRes   = input.color(color.new(#9598a1, 50), "Resistance Color", group = gSR)
+strengthSR = input.int(2, "S/R Strength", minval = 1, group = gSR)
+lineStyle  = input.string("Dotted", "Line Style", options = ["Solid", "Dotted", "Dashed"], group = gSR)
+lineWidth  = input.int(1, "S/R Line Width", minval = 1, group = gSR)
+useZones   = input.bool(true, "Zones On/Off", group = gSR)
+useHLZones = input.bool(true, "High Low Zones On/Off", group = gSR)
+zoneWidth  = input.int(2, "Zone Width %", minval = 0, tooltip = "Calculated using % of the distance between highest/lowest in last 300 bars", group = gSR)
+expandSR   = input.bool(true, "Expand Support and Resistances", group = gSR)
+
+// ----- Lot calculator -----
+gr3         = "────────── Trade Settings ──────────"
+cur         = input.string("USD", "Account Currency", options = ["USD", "EUR", "GBP", "CAD", "AUD"], inline = "Acc", group = gr3)
+qty         = input.int(100, "Units/Lot", options = [1, 10, 100, 1000, 10000, 100000], tooltip = "XAU/USD = 100", inline = "Acc", group = gr3)
+bal         = input.float(50000.00, "Balance", group = gr3)
+riskcent    = input.float(1.0, "Risk %", inline = "Risk", group = gr3)
+target      = input.float(2.0, "R:R", tooltip = "Risk to Reward ratio", inline = "Risk", group = gr3)
+
+gr4         = "────────── Auto Stop Loss ──────────"
+boxExtendBars = input.int(10, "Box Length", tooltip = "Bars to extend", minval = 1, maxval = 50, group = gr4)
+slBufferTicks = input.int(100, "SL Buffer (ticks)", minval = 0, tooltip = "Distance added beyond the last swing for the stop loss", group = gr4)
+
+gr1         = "────────── Visual ──────────"
+rBoxCol     = input.color(color.new(#ef5350, 85), "Risk Zone", inline = "box", group = gr1)
+tBoxCol     = input.color(color.new(#26a69a, 85), "Target Zone", inline = "box", group = gr1)
+showEntry   = input.bool(true, "Show Entry Line", group = gr1)
+
+gr2         = "────────── Table ──────────"
+dashTitleCol = input.color(#0a0e12, "Header", inline = "table", group = gr2)
+dashDataCol  = input.color(#131920, "Data", inline = "table", group = gr2)
+dashTextCol  = input.color(#b0bec5, "Text", inline = "table", group = gr2)
+dashBDCol    = input.color(#1e2530, "Border", inline = "table", group = gr2)
+dashBDwth    = input.int(1, "Border Width", inline = "Table2", group = gr2)
+tableLoc     = input.string(position.middle_right, "Position", options = [position.top_right, position.middle_right, position.bottom_right, position.top_left, position.middle_left, position.bottom_left, position.top_center, position.middle_center, position.bottom_center], inline = "Table2", group = gr2)
+
+// ----- ZigZag -----
+K0 = "Zigzag values\nDefault : 14\nMin : 2\nMax : 50"
+K1 = "Short\nExample : L or LL\nLong\nExample : Low or Lower Low"
+K2 = "Contrast : Contrast color of chart background\nCustom : Input color\nNone : Color follow Trend Color"
+K3 = "Small font size recommended for mobile app or multiple layout"
+K4 = "Default\nStyle : Solid\nWidth : 4"
+
+gZZ          = " ZIGZAG HIGH - LOW"
+length1      = input.int(13, " Level ZigZag ", minval = 2, maxval = 50, tooltip = K0, group = gZZ)
+colorUp      = input.color(color.rgb(0, 250, 75), "Trend Color", inline = "0", group = gZZ)
+colorDn      = input.color(color.rgb(202, 70, 70), "", inline = "0", group = gZZ)
+showLabel    = input.bool(true, "Label", group = "Show / hide", inline = "1")
+showLine     = input.bool(true, "Line", group = "Show / hide", inline = "1")
+displayLabel = input.string("HHLL", "Text", group = "Label", inline = "2", options = ["HHLL", "HL"])
+nameHL       = input.string("Short", "", group = "Label", inline = "2", options = ["Short", "Long"], tooltip = K1)
+colorLabel   = input.string("Trend", "Color", group = "Label", inline = "3", options = ["Contrast", "Custom", "Trend"])
+customLabel  = input.color(color.blue, "", group = "Label", inline = "3", tooltip = K2)
+sizeLabel    = input.string("normal", "Size", group = "Label", inline = "4", options = ["tiny", "small", "normal", "large", "huge"], tooltip = K3)
+lineType     = input.string("dash", "Display", group = "Line", inline = "5", options = ["dash", "dot", "solid", "arrow right", "arrow left"])
+zzWidth      = input.int(1, "", group = "Line", inline = "5", minval = 1, maxval = 4, tooltip = K4)
+colorLine    = input.string("Trend", "Color", group = "Line", inline = "6", options = ["Contrast", "Custom", "Trend"])
+customLine   = input.color(color.blue, "", group = "Line", inline = "6", tooltip = K2)
+
+// ----- Parabolic SAR (hidden) -----
+gSAR      = "Parabolic SAR"
+sarStart  = input.float(0.02, "Start", group = gSAR)
+sarInc    = input.float(0.02, "Increment", group = gSAR)
+sarMax    = input.float(0.2, "Max Value", group = gSAR)
+
+// ----- Follow Line 2in1 -----
+gFL1          = "Follow Line (BB + ATR)"
+BBperiod1     = input.int(21, "BB Period", minval = 1, group = gFL1)
+BBdeviations1 = input.float(1.00, "BB Deviations", minval = 0.1, step = 0.05, group = gFL1)
+UseATRfilter1 = input.bool(true, "ATR Filter", group = gFL1)
+ATRperiod1    = input.int(5, "ATR Period", minval = 1, group = gFL1)
+hl1           = input.bool(false, "Hide Labels", group = gFL1)
+
+// ----- Follow Line with MA types -----
+gFL2         = "Smart Follow Line (MA)"
+UCCR         = input.bool(true, "Use Current Chart Resolution?", group = gFL2)
+TYPE         = input.string("EMA", "Type Of MA", options = ["RMA", "SMA", "EMA", "WMA", "VWMA", "SMMA", "KMA", "TMA", "HullMA", "DEMA", "TEMA", "CTI"], group = gFL2)
+RES          = input.timeframe("60", "Resolution", group = gFL2)
+LEN          = input.int(21, "Period", minval = 1, group = gFL2)
+BBdeviations = input.float(1.00, "Deviations", minval = 0.1, step = 0.05, group = gFL2)
+ATRperiod    = input.int(5, "ATR Period", minval = 1, group = gFL2)
+SOUR         = input.source(close, "Source", group = gFL2)
+hl           = input.bool(false, "Hide Labels", group = gFL2)
+
+// ----- Kernel regression -----
+gKR   = "Kernel Regression"
+filt2 = input.string("Smooth", "", options = ["No Filter", "Smooth", "Zero Lag"], group = gKR, inline = "k", tooltip = "Select Kernel Regression type from the dropdown box.")
+type2 = input.string("Rational Quadratic", "", options = ["Rational Quadratic", "Gaussian", "Periodic", "Locally Periodic"], group = gKR, inline = "k", tooltip = "Select Kernel Regression type from the dropdown box.")
+h2    = input.int(8, "Lookback Window", minval = 3, tooltip = "The number of bars used for the estimation. Recommended range: 3-50", group = gKR, inline = "k")
+r2    = input.float(1., "Weighting", step = 0.25, tooltip = "Relative weighting of time frames. Recommended range: 0.25-25", group = gKR, inline = "kernel2")
+x2    = input.int(20, "Level", tooltip = "Bar index on which to start regression. Recommended range: 2-25", group = gKR, inline = "kernel2")
+lag2  = input.int(2, "Lag", tooltip = "Lag for crossover detection. Recommended range: 1-2", group = gKR, inline = "kernel2")
+
+// ----- Orderblocks -----
+gOB            = "Orderblocks"
+showFractals   = input.bool(false, "Show Fractal Points ?", group = gOB)
+filterFractal  = input.string("3", "Filter 3/5 bar fractal", options = ["3", "5"], group = gOB)
+findObType     = input.string("Close", "Find OB after fractal break of close/HL", options = ["Close", "HL"], group = gOB)
+filterFvgs     = input.bool(true, "Filter only OB that follow with FVG ?", group = gOB)
+fvgDistance    = input.int(1, "Max bars between the OB and FVG", minval = 1, maxval = 6, group = gOB)
+lineHeight     = input.string("Wick", "Line Height", options = ["Body", "Wick"], group = gOB)
+delLines       = input.bool(true, "Delete lines after fill ?", group = gOB)
+ob_lines_style = input.string("Solid", "OB Lines style", options = ["Solid", "Dashed", "Dotted"], group = gOB)
+ob_line_length = input.int(100, "Length of OB lines", minval = 1, maxval = 500, group = gOB)
+ob_linesWidth  = input.int(2, "OB Lines Width ?", minval = 1, maxval = 4, group = gOB)
+bear_line_color = input.color(color.red, "Bear OB Line color", group = gOB)
+bull_line_color = input.color(color.blue, "Bull OB Line color", group = gOB)
+
+// ===============================================================================================
+// SMART TRAIL
+// ===============================================================================================
+
+// Normalised price (identical to chart OHLC; differs only on non-standard chart types)
+[norm_o, norm_h, norm_l, norm_c] = request.security(ticker.new(syminfo.prefix, syminfo.ticker), timeframe.period, [open, high, low, close])
+
+Wild_ma(_src, _malength) =>
+    float _wild = 0.0
+    _wild := nz(_wild[1]) + (_src - nz(_wild[1])) / _malength
+    _wild
+
+HiLo = math.min(norm_h - norm_l, 1.5 * nz(ta.sma(norm_h - norm_l, ATRPeriod)))
+HRef = norm_l <= norm_h[1] ? norm_h - norm_c[1] : norm_h - norm_c[1] - 0.5 * (norm_l - norm_h[1])
+LRef = norm_h >= norm_l[1] ? norm_c[1] - norm_l : norm_c[1] - norm_l - 0.5 * (norm_l[1] - norm_h)
+trueRange = trailType == "modified" ? math.max(HiLo, HRef, LRef) : math.max(norm_h - norm_l, math.abs(norm_h - norm_c[1]), math.abs(norm_l - norm_c[1]))
+
+loss = ATRFactor * Wild_ma(trueRange, ATRPeriod)
+Up68 = norm_c - loss
+Dn68 = norm_c + loss
+
+float TrendUp = Up68
+float TrendDown = Dn68
+int Trend = 1
+
+TrendUp := norm_c[1] > TrendUp[1] ? math.max(Up68, TrendUp[1]) : Up68
+TrendDown := norm_c[1] < TrendDown[1] ? math.min(Dn68, TrendDown[1]) : Dn68
+Trend := norm_c > TrendDown[1] ? 1 : norm_c < TrendUp[1] ? -1 : nz(Trend[1], 1)
+trail = Trend == 1 ? TrendUp : TrendDown
+
+float ex = 0.0
+ex := ta.crossover(Trend, 0) ? norm_h : ta.crossunder(Trend, 0) ? norm_l : Trend == 1 ? math.max(ex[1], norm_h) : Trend == -1 ? math.min(ex[1], norm_l) : ex[1]
+
+plot(trail, "S/R - SIGNAL", color = Trend == 1 ? color.rgb(0, 242, 255) : color.rgb(255, 0, 200), editable = false, display = display.none)
+
+// Fibonacci levels between trail and extreme
+state = Trend == 1 ? "long" : "short"
+f1 = ex + (trail - ex) * 61.8 / 100
+f2 = ex + (trail - ex) * 78.6 / 100
+f3 = ex + (trail - ex) * 88.6 / 100
+
+trailSma = ShowSmartTrail ? ta.sma(trail, Smoothing) : na
+trailCol = Trend == 1 ? color.new(#2157f9, 0) : color.new(#ff1100, 0)
+
+pTrailHidden = plot(trailSma, "Smart Trail (hidden)", color = trailCol, editable = false, display = display.none)
+pTrail       = plot(trailSma, "Smart Trail", color = trailCol, editable = false)
+pF1          = plot(ShowSmartTrail ? ta.sma(f1, Smoothing) : na, "Fib 61.8", editable = false, display = display.none)
+pF2          = plot(ShowSmartTrail ? ta.sma(f2, Smoothing) : na, "Fib 78.6", editable = false, display = display.none)
+pF3          = plot(ShowSmartTrail ? ta.sma(f3, Smoothing) : na, "Fib 88.6", editable = false, display = display.none)
+
+fill(pTrailHidden, pF1, color = state == "long" ? color.new(#2157f9, 70) : color.new(#ff1100, 70))
+fill(pTrailHidden, pF2, color = state == "long" ? color.new(#2157f9, 71) : color.new(#ff1100, 72))
+fill(pTrail, pF3, color = state == "long" ? color.new(#2157f9, 72) : color.new(#ff1100, 71))
+
+// ===============================================================================================
+// ZIGZAG HIGH - LOW
+// ===============================================================================================
+
+type HL
+    string Hi = na
+    string Lo = na
+
+type point
+    int x = na
+    float y = na
+    string sty = na
+    color col = na
+    string str = na
+
+type startUp
+    float hi = na
+    float lo = na
+    color colorHi = na
+    color colorLo = na
+    string strHi = na
+    string strLo = na
+
+[H, L] = switch nameHL
+    "Long" => ["HIGH", "LOW"]
+    => ["H", "L"]
+
+[Hi, Lo] = switch nameHL
+    "Long" => ["HIGHER\n", "LOWER\n"]
+    => ["H", "L"]
+
+switchLine = switch lineType
+    "dot" => line.style_dotted
+    "solid" => line.style_solid
+    "arrow right" => line.style_arrow_right
+    "arrow left" => line.style_arrow_left
+    => line.style_dashed
+
+switchLabelColor = colorLabel == "Contrast" ? chart.fg_color : customLabel
+switchLineColor = colorLine == "Contrast" ? chart.fg_color : customLine
+
+float Kh = ta.highestbars(high, length1) == 0 ? high : na
+float Kl = ta.lowestbars(low, length1) == 0 ? low : na
+var int dir = 0
+dir := not na(Kh) and na(Kl) ? 1 : not na(Kl) and na(Kh) ? -1 : dir
+var zigzag = array.new<point>(0)
+oldzigzag = zigzag.copy()
+dirchanged = ta.change(dir) != 0
+hiLo = HL.new(Hi, Lo)
+varSetup = startUp.new(Kh, Kl, colorUp, colorDn, H, L)
+
+method dirVariables(startUp setup, int direction) =>
+    bool up = direction == 1
+    point.new(bar_index, up ? setup.hi : setup.lo, up ? label.style_label_down : label.style_label_up, up ? setup.colorHi : setup.colorLo, up ? setup.strHi : setup.strLo)
+
+method initialize(point[] zigzag, startUp setup, int direction, int maxSize = 10) =>
+    zigzag.unshift(setup.dirVariables(direction))
+    if zigzag.size() > maxSize
+        zigzag.pop()
+    true
+
+method update(point[] zigzag, startUp setup, int direction, int maxSize = 10) =>
+    if zigzag.size() == 0
+        zigzag.initialize(setup, direction, maxSize)
+    else
+        newPoint = setup.dirVariables(direction)
+        dirOver = direction == 1 and newPoint.y > zigzag.get(0).y
+        dirLess = direction == -1 and newPoint.y < zigzag.get(0).y
+        if dirOver or dirLess
+            zigzag.set(0, newPoint)
+        true
+
+method boolPoint(point[] zigzag, point[] oldzigzag) =>
+    boolOr = zigzag.get(0).x != oldzigzag.get(0).x or zigzag.get(0).y != oldzigzag.get(0).y
+    boolAnd = zigzag.get(1).x == oldzigzag.get(1).x and zigzag.get(1).y == oldzigzag.get(1).y
+    [boolOr, boolAnd]
+
+method createLabel(point[] zigzag, string lblSize) =>
+    point p = zigzag.get(0)
+    label.new(x = p.x, y = p.y, text = p.str, xloc = xloc.bar_index, color = color.new(color.blue, 100), style = p.sty, textcolor = p.col, size = lblSize, tooltip = p.str + "\n" + str.tostring(p.y))
+
+method createLine(point[] zigzag, int lineWidthPx, string lineSty) =>
+    line.new(x1 = zigzag.get(1).x, y1 = zigzag.get(1).y, x2 = zigzag.get(0).x, y2 = zigzag.get(0).y, xloc = xloc.bar_index, color = zigzag.get(0).col, style = lineSty, width = lineWidthPx)
+
+method compareHL(point[] zigzag, HL hiLo, int direction) =>
+    direction == 1 ? (zigzag.get(0).y > zigzag.get(2).y ? hiLo.Hi : hiLo.Lo) : (zigzag.get(0).y < zigzag.get(2).y ? hiLo.Lo : hiLo.Hi)
+
+method textTip(label this, string txt, string tip) =>
+    this.set_text(txt)
+    this.set_tooltip(tip)
+
+if not na(Kh) or not na(Kl)
+    if dirchanged
+        zigzag.initialize(varSetup, dir, 4)
+    else
+        zigzag.update(varSetup, dir, 4)
+
+var line dirLine = na
+var label dirLabel = na
+var string dirString = na
+
+if zigzag.size() >= 3
+    [boolOr, boolAnd] = zigzag.boolPoint(oldzigzag)
+    if boolOr
+        if boolAnd
+            dirLine.delete()
+            dirLabel.delete()
+        if showLabel
+            dirLabel := zigzag.createLabel(sizeLabel)
+            if displayLabel == "HHLL" and zigzag.size() >= 4
+                dirString := zigzag.compareHL(hiLo, dir)
+                dirLabel.textTip(dirString + zigzag.get(0).str, dirString + zigzag.get(0).str + "\n" + str.tostring(zigzag.get(0).y))
+            if colorLabel != "Trend"
+                dirLabel.set_textcolor(switchLabelColor)
+        if showLine
+            dirLine := zigzag.createLine(zzWidth, switchLine)
+            if colorLine != "Trend"
+                dirLine.set_color(switchLineColor)
+
+// Latest swing high / low (used for the auto stop loss)
+var float lastSwingLow = na
+var float lastSwingHigh = na
+if zigzag.size() >= 2
+    if dir == 1
+        lastSwingHigh := zigzag.get(0).y
+    else if dir == -1
+        lastSwingLow := zigzag.get(0).y
+
+// ===============================================================================================
+// PARABOLIC SAR (hidden, kept from the original)
+// ===============================================================================================
+
+plot(ta.sar(sarStart, sarInc, sarMax), "ParabolicSAR", style = plot.style_cross, color = #ffff00, display = display.none)
+
+// ===============================================================================================
+// SUPPORT & RESISTANCE
+// ===============================================================================================
+
+rb = 10
+prd = 284
+ChannelW = 10
+label_loc = 55
+srStyle = lineStyle == "Solid" ? line.style_solid : lineStyle == "Dotted" ? line.style_dotted : line.style_dashed
+srExtend = expandSR ? extend.both : extend.right
+
+ph = ta.pivothigh(rb, rb)
+pl = ta.pivotlow(rb, rb)
+prdhighest = ta.highest(prd)
+prdlowest = ta.lowest(prd)
+cwidth = (prdhighest - prdlowest) * ChannelW / 100
+zonePerc = (ta.highest(300) - ta.lowest(300)) * zoneWidth / 100
+
+var sr_levs = array.new_float(21, na)
+var float highestph = na
+var float lowestpl = na
+
+if not na(ph) or not na(pl)
+    sr_levels = array.new_float(21, na)
+    aas = array.new_bool(41, true)
+    highestph := prdlowest
+    lowestpl := prdhighest
+    int countpp = 0
+    for x = 0 to prd
+        if na(close[x])
+            break
+        if not na(ph[x]) or not na(pl[x])
+            highestph := math.max(highestph, nz(ph[x], prdlowest), nz(pl[x], prdlowest))
+            lowestpl := math.min(lowestpl, nz(ph[x], prdhighest), nz(pl[x], prdhighest))
+            countpp += 1
+            if countpp > 40
+                break
+            if aas.get(countpp)
+                upl = (not na(ph[x]) ? high[x + rb] : low[x + rb]) + cwidth
+                dnl = (not na(ph[x]) ? high[x + rb] : low[x + rb]) - cwidth
+                tmp = array.new_bool(41, true)
+                int cnt = 0
+                int tpoint = 0
+                for xx = 0 to prd
+                    if na(close[xx])
+                        break
+                    if not na(ph[xx]) or not na(pl[xx])
+                        bool chg = false
+                        cnt += 1
+                        if cnt > 40
+                            break
+                        if aas.get(cnt)
+                            if not na(ph[xx])
+                                if high[xx + rb] <= upl and high[xx + rb] >= dnl
+                                    tpoint += 1
+                                    chg := true
+                            if not na(pl[xx])
+                                if low[xx + rb] <= upl and low[xx + rb] >= dnl
+                                    tpoint += 1
+                                    chg := true
+                        if chg and cnt < 41
+                            tmp.set(cnt, false)
+                if tpoint >= strengthSR
+                    for g = 0 to 40
+                        if not tmp.get(g)
+                            aas.set(g, false)
+                    if not na(ph[x]) and countpp < 21
+                        sr_levels.set(countpp, high[x + rb])
+                    if not na(pl[x]) and countpp < 21
+                        sr_levels.set(countpp, low[x + rb])
+    for x = 0 to sr_levs.size() - 1
+        sr_levs.set(x, sr_levels.get(x))
+
+// Drawings are only needed on the last bar
+var line highest_ = na
+var line lowest_ = na
+var line highest_fill1 = na
+var line highest_fill2 = na
+var line lowest_fill1 = na
+var line lowest_fill2 = na
+var linefill highest_lf = na
+var linefill lowest_lf = na
+var label hlabel = na
+var label llabel = na
+var sr_lines = array.new<line>(21, na)
+var sr_linesH = array.new<line>(21, na)
+var sr_linesL = array.new<line>(21, na)
+var sr_linesF = array.new<linefill>(21, na)
+var sr_labels = array.new<label>(21, na)
+
+if barstate.islast
+    line.delete(highest_)
+    line.delete(lowest_)
+    line.delete(highest_fill1)
+    line.delete(highest_fill2)
+    line.delete(lowest_fill1)
+    line.delete(lowest_fill2)
+    linefill.delete(highest_lf)
+    linefill.delete(lowest_lf)
+    label.delete(hlabel)
+    label.delete(llabel)
+    for x = 0 to sr_lines.size() - 1
+        line.delete(sr_lines.get(x))
+        line.delete(sr_linesH.get(x))
+        line.delete(sr_linesL.get(x))
+        linefill.delete(sr_linesF.get(x))
+        label.delete(sr_labels.get(x))
+
+    if enableSR
+        hi_col = close >= highestph ? colorSup : colorRes
+        lo_col = close >= lowestpl ? colorSup : colorRes
+        highest_ := line.new(bar_index - 311, highestph, bar_index, highestph, xloc.bar_index, srExtend, hi_col, srStyle, lineWidth)
+        lowest_ := line.new(bar_index - 311, lowestpl, bar_index, lowestpl, xloc.bar_index, srExtend, lo_col, srStyle, lineWidth)
+        if useHLZones
+            highest_fill1 := line.new(bar_index - 311, highestph + zonePerc, bar_index, highestph + zonePerc, xloc.bar_index, srExtend, na)
+            highest_fill2 := line.new(bar_index - 311, highestph - zonePerc, bar_index, highestph - zonePerc, xloc.bar_index, srExtend, na)
+            lowest_fill1 := line.new(bar_index - 311, lowestpl + zonePerc, bar_index, lowestpl + zonePerc, xloc.bar_index, srExtend, na)
+            lowest_fill2 := line.new(bar_index - 311, lowestpl - zonePerc, bar_index, lowestpl - zonePerc, xloc.bar_index, srExtend, na)
+            highest_lf := linefill.new(highest_fill1, highest_fill2, color.new(hi_col, 80))
+            lowest_lf := linefill.new(lowest_fill1, lowest_fill2, color.new(lo_col, 80))
+
+        for x = 0 to sr_lines.size() - 1
+            lvl = sr_levs.get(x)
+            if not na(lvl)
+                line_col = close >= lvl ? colorSup : colorRes
+                sr_lines.set(x, line.new(bar_index - 355, lvl, bar_index, lvl, xloc.bar_index, srExtend, line_col, srStyle, lineWidth))
+                if useZones
+                    sr_linesH.set(x, line.new(bar_index - 355, lvl + zonePerc, bar_index, lvl + zonePerc, xloc.bar_index, srExtend, na))
+                    sr_linesL.set(x, line.new(bar_index - 355, lvl - zonePerc, bar_index, lvl - zonePerc, xloc.bar_index, srExtend, na))
+                    sr_linesF.set(x, linefill.new(sr_linesH.get(x), sr_linesL.get(x), color.new(line_col, 80)))
+                lab_style = close >= lvl ? label.style_label_up : label.style_label_down
+                sr_labels.set(x, label.new(bar_index + label_loc, lvl, str.tostring(math.round_to_mintick(lvl)), color = line_col, textcolor = #000000, style = lab_style))
+
+        hlabel := label.new(bar_index + label_loc + 20, highestph, "High Level : " + str.tostring(highestph), color = hi_col, textcolor = #000000, style = label.style_label_down)
+        llabel := label.new(bar_index + label_loc + 20, lowestpl, "Low  Level : " + str.tostring(lowestpl), color = lo_col, textcolor = #000000, style = label.style_label_up)
+
+// ===============================================================================================
+// FOLLOW LINES
+// ===============================================================================================
+
+// Shared follow-line engine: returns [trendLine, direction]
+followLine(int sig, float lo, float hi, float pad) =>
+    float tl = na
+    tl := tl[1]
+    if sig == 1
+        float up = lo - pad
+        tl := na(tl[1]) ? up : math.max(up, tl[1])
+    else if sig == -1
+        float dn = hi + pad
+        tl := na(tl[1]) ? dn : math.min(dn, tl[1])
+    int trend = 0
+    trend := nz(trend[1])
+    if tl > tl[1]
+        trend := 1
+    if tl < tl[1]
+        trend := -1
+    [tl, trend]
+
+// ----- Follow Line 2in1 (BB + ATR) -----
+atr1 = ta.atr(ATRperiod1)
+atr8 = ta.atr(8)
+BBbasis1 = ta.sma(close, BBperiod1)
+BBdev1 = ta.stdev(close, BBperiod1) * BBdeviations1
+BBUpper1 = BBbasis1 + BBdev1
+BBLower1 = BBbasis1 - BBdev1
+BBSignal1 = close > BBUpper1 ? 1 : close < BBLower1 ? -1 : 0
+
+[TrendLine1, iTrend1] = followLine(BBSignal1, low, high, UseATRfilter1 ? atr1 : 0.0)
+
+buy1 = iTrend1[1] == -1 and iTrend1 == 1
+sell1 = iTrend1[1] == 1 and iTrend1 == -1
+
+plot(TrendLine1, "Trend Line", color = iTrend1 > 0 ? color.rgb(2, 248, 27) : color.red, linewidth = 2)
+plotshape(buy1 and not hl1 ? TrendLine1 - atr8 : na, "Buy", text = "Buy", style = shape.labelup, location = location.absolute, color = color.new(color.teal, 50), textcolor = color.white, size = size.auto)
+plotshape(sell1 and not hl1 ? TrendLine1 + atr8 : na, "Sell", text = "Sell", style = shape.labeldown, location = location.absolute, color = color.new(#ff0000, 0), textcolor = color.white, size = size.auto)
+
+alertcondition(sell1, title = "sell1", message = "sell1")
+alertcondition(buy1, title = "buy1", message = "buy1")
+alertcondition(buy1 or sell1, title = "buy1/sell1", message = "buy1/sell1")
+
+// ----- Smart Follow Line (selectable MA, optional higher timeframe) -----
+cti(float src, int sm, float cd) =>
+    di = (sm - 1.0) / 2.0 + 1.0
+    c1 = 2 / (di + 1.0)
+    c2 = 1 - c1
+    c3 = 3.0 * (cd * cd + cd * cd * cd)
+    c4 = -3.0 * (2.0 * cd * cd + cd + cd * cd * cd)
+    c5 = 3.0 * cd + 1.0 + cd * cd * cd + 3.0 * cd * cd
+    float i1 = 0.0
+    float i2 = 0.0
+    float i3 = 0.0
+    float i4 = 0.0
+    float i5 = 0.0
+    float i6 = 0.0
+    i1 := c1 * src + c2 * nz(i1[1])
+    i2 := c1 * i1 + c2 * nz(i2[1])
+    i3 := c1 * i2 + c2 * nz(i3[1])
+    i4 := c1 * i3 + c2 * nz(i4[1])
+    i5 := c1 * i4 + c2 * nz(i5[1])
+    i6 := c1 * i5 + c2 * nz(i6[1])
+    -cd * cd * cd * i6 + c3 * i5 + c4 * i4 + c5 * i3
+
+smma(float src, int len) =>
+    float s = na
+    smaVal = ta.sma(src, len)
+    s := na(s[1]) ? smaVal : (s[1] * (len - 1) + src) / len
+    s
+
+kma(float src, int length) =>
+    nfastend = 0.666
+    nslowend = 0.0645
+    nsignal = math.abs(src - src[length])
+    nnoise = math.sum(math.abs(src - src[1]), length)
+    nefratio = nnoise != 0 ? nsignal / nnoise : 0
+    nsmooth = math.pow(nefratio * (nfastend - nslowend) + nslowend, 2)
+    float nAMA = 0.0
+    nAMA := nz(nAMA[1]) + nsmooth * (src - nz(nAMA[1]))
+    nAMA
+
+ma(string smoothing, float src, int length) =>
+    switch smoothing
+        "RMA" => ta.rma(src, length)
+        "SMA" => ta.sma(src, length)
+        "EMA" => ta.ema(src, length)
+        "WMA" => ta.wma(src, length)
+        "VWMA" => ta.vwma(src, length)
+        "SMMA" => smma(src, length)
+        "HullMA" => ta.hma(src, length)
+        "KMA" => kma(src, length)
+        "TMA" => ta.sma(ta.sma(src, length), length)
+        "DEMA" =>
+            e1 = ta.ema(src, length)
+            2 * e1 - ta.ema(e1, length)
+        "TEMA" =>
+            e1 = ta.ema(src, length)
+            e2 = ta.ema(e1, length)
+            e3 = ta.ema(e2, length)
+            3 * e1 - 3 * e2 + e3
+        "CTI" => cti(src, length, 0.0)
+        => src
+
+final_res = UCCR ? timeframe.period : RES
+MA = ma(TYPE, SOUR, LEN)
+[MA_MTF, close_, low_, high_, atr_] = request.security(syminfo.tickerid, final_res, [MA, close, low, high, ta.atr(ATRperiod)])
+
+BBUpper = MA_MTF + ta.stdev(close_, LEN) * BBdeviations
+BBLower = MA_MTF - ta.stdev(close_, LEN) * BBdeviations
+BBSignal = close_ > BBUpper ? 1 : close_ < BBLower ? -1 : 0
+
+[TrendLine, iTrend] = followLine(BBSignal, low_, high_, atr_)
+
+buy = iTrend[1] == -1 and iTrend == 1
+sell = iTrend[1] == 1 and iTrend == -1
+
+plot(TrendLine, "Trend Line (Smart)", color = iTrend > 0 ? color.rgb(1, 248, 43) : color.red, linewidth = 2)
+plotshape(buy and not hl ? TrendLine - atr_ : na, "Smart Buy", text = "Smart Buy", style = shape.labelup, location = location.absolute, color = color.new(color.teal, 50), textcolor = color.white, size = size.auto)
+plotshape(sell and not hl ? TrendLine + atr_ : na, "Smart Sell", text = "Smart Sell", style = shape.labeldown, location = location.absolute, color = color.new(#f60808, 0), textcolor = color.white, size = size.auto)
+
+alertcondition(sell, title = "Sell", message = "Sell")
+alertcondition(buy, title = "Buy", message = "Buy")
+alertcondition(buy or sell, title = "Buy/Sell", message = "Buy/Sell")
+
+// ===============================================================================================
+// KERNEL REGRESSION
+// ===============================================================================================
+
+kernelWeight(int i, string kind, float lb, float rw, float per) =>
+    switch kind
+        "Rational Quadratic" => math.pow(1 + math.pow(i, 2) / (math.pow(lb, 2) * 2 * rw), -rw)
+        "Gaussian" => math.exp(-math.pow(i, 2) / (2 * math.pow(lb, 2)))
+        "Periodic" => math.exp(-2 * math.pow(math.sin(math.pi * i / per), 2) / math.pow(lb, 2))
+        "Locally Periodic" => math.exp(-2 * math.pow(math.sin(math.pi * i / per), 2) / math.pow(lb, 2)) * math.exp(-math.pow(i, 2) / (2 * math.pow(lb, 2)))
+        => na
+
+kernelReg(float src, string kind, float lb, float rw, float per, int startAtBar, string filt) =>
+    float num1 = 0.0
+    float den1 = 0.0
+    for i = 0 to startAtBar + 1
+        w = kernelWeight(i, kind, lb, rw, per)
+        num1 += src[i] * w
+        den1 += w
+    yhat1 = num1 / den1
+    float num2 = 0.0
+    float den2 = 0.0
+    for i = 0 to startAtBar + 1
+        w = kernelWeight(i, kind, lb, rw, per)
+        num2 += yhat1[i] * w
+        den2 += w
+    yhat2 = num2 / den2
+    zlag = yhat1 + (yhat1 - yhat2)
+    filt == "No Filter" ? yhat1 : filt == "Smooth" ? yhat2 : filt == "Zero Lag" ? zlag : na
+
+kLookback = type2 == "Gaussian" ? float(h2 - lag2) : float(h2)
+ksrc = kernelReg(close, type2, kLookback, r2, float(lag2), x2, filt2)
+
+plot(ksrc, "Line2", color = ksrc > ksrc[1] ? color.rgb(9, 255, 95) : color.red, linewidth = 2)
+
+// ===============================================================================================
+// AUTO LOT CALCULATOR
+// ===============================================================================================
+
+var float p1 = na
+var float p2_calc = na
+var int entryBar = na
+slBuffer = slBufferTicks * syminfo.mintick
+
+if buy and not na(lastSwingLow)
+    p1 := close
+    p2_calc := lastSwingLow - slBuffer
+    entryBar := bar_index
+
+if sell and not na(lastSwingHigh)
+    p1 := close
+    p2_calc := lastSwingHigh + slBuffer
+    entryBar := bar_index
+
+riskval = math.abs(p1 - p2_calc)
+riskcent_calc = math.abs(riskcent) / 100
+notsame = syminfo.currency != cur
+vt = request.security(notsame ? cur + syminfo.currency : syminfo.tickerid, timeframe.period, close, ignore_invalid_symbol = true)
+
+startBar = entryBar
+endBar = bar_index + boxExtendBars
+
+var box RiskBox = na
+var box TargetBox = na
+var float targetVal = 0.0
+
+risk = bal * riskcent_calc
+float DperP = risk / ((p1 - p2_calc) * qty)
+if notsame
+    DperP := DperP * vt
+
+lots = math.round(math.abs(DperP), 2)
+
+if barstate.islast and not na(p1) and not na(p2_calc)
+    box.delete(RiskBox)
+    box.delete(TargetBox)
+
+    RiskBox := box.new(startBar, p1, endBar, p2_calc, bgcolor = rBoxCol, border_color = color.new(#ef5350, 50), border_width = 1)
+
+    if p1 > p2_calc
+        targetVal := p1 + riskval * math.abs(target)
+        TargetBox := box.new(startBar, targetVal, endBar, p1, bgcolor = tBoxCol, border_color = color.new(#26a69a, 50), border_width = 1)
+    else
+        targetVal := p1 - riskval * math.abs(target)
+        TargetBox := box.new(startBar, p1, endBar, targetVal, bgcolor = tBoxCol, border_color = color.new(#26a69a, 50), border_width = 1)
+
+var dash = table.new(position = tableLoc, columns = 2, rows = 7, frame_width = 2)
+
+if barstate.islast and not na(p1)
+    table.cell(dash, 1, 0, "Balance", text_color = dashTextCol, bgcolor = dashTitleCol, text_halign = text.align_left)
+    table.cell(dash, 1, 1, "Risk", text_color = dashTextCol, bgcolor = dashTitleCol, text_halign = text.align_left)
+    table.cell(dash, 1, 2, "$ Risk", text_color = dashTextCol, bgcolor = dashTitleCol, text_halign = text.align_left)
+    table.cell(dash, 1, 3, "Entry", text_color = dashTextCol, bgcolor = dashTitleCol, text_halign = text.align_left)
+    table.cell(dash, 1, 4, "Stop Loss", text_color = dashTextCol, bgcolor = dashTitleCol, text_halign = text.align_left)
+    table.cell(dash, 1, 5, "Take Profit", text_color = dashTextCol, bgcolor = dashTitleCol, text_halign = text.align_left)
+    table.cell(dash, 1, 6, "Lots", text_color = dashTextCol, bgcolor = dashTitleCol, text_halign = text.align_left)
+
+    table.cell(dash, 0, 0, str.tostring(bal) + " " + cur, text_color = #90a4ae, bgcolor = dashDataCol, text_halign = text.align_right)
+    table.cell(dash, 0, 1, str.tostring(riskcent) + "%", text_color = #90a4ae, bgcolor = dashDataCol, text_halign = text.align_right)
+    table.cell(dash, 0, 2, str.tostring(math.round(risk, 2)), text_color = #90a4ae, bgcolor = dashDataCol, text_halign = text.align_right)
+    table.cell(dash, 0, 3, str.tostring(math.round(p1, 4)), text_color = #ffa726, bgcolor = dashDataCol, text_halign = text.align_right)
+    table.cell(dash, 0, 4, str.tostring(math.round(p2_calc, 4)), text_color = #ef5350, bgcolor = dashDataCol, text_halign = text.align_right)
+    table.cell(dash, 0, 5, str.tostring(math.round(targetVal, 4)), text_color = #26a69a, bgcolor = dashDataCol, text_halign = text.align_right)
+    table.cell(dash, 0, 6, str.tostring(lots), text_color = #66bb6a, bgcolor = dashDataCol, text_halign = text.align_right)
+    table.set_border_color(dash, dashBDCol)
+    table.set_border_width(dash, dashBDwth)
+
+plot(showEntry and not na(p1) ? p1 : na, "Entry", color = color.new(#ffa726, 60), linewidth = 1)
+
+// ===============================================================================================
+// ORDERBLOCKS
+// ===============================================================================================
+
+bars_back = 500
+ob_lineStyle = ob_lines_style == "Solid" ? line.style_solid : ob_lines_style == "Dashed" ? line.style_dashed : line.style_dotted
+
+// ----- Fractals -----
+// 3-bar fractal is confirmed on the bar after the pivot (offset 1), 5-bar on offset 2
+fracOff = filterFractal == "3" ? 1 : 2
+
+isFractalHigh = filterFractal == "3" ? (high < high[1] and (high[2] < high[1] or (high[2] == high[1] and high[3] < high[2]))) : (high < high[2] and high[1] < high[2] and high[3] < high[2] and high[4] < high[2])
+isFractalLow = filterFractal == "3" ? (low > low[1] and (low[2] > low[1] or (low[2] == low[1] and low[3] > low[2]))) : (low > low[2] and low[1] > low[2] and low[3] > low[2] and low[4] > low[2])
+
+var fractal_highs = array.new_float(0)
+var fractal_high_bars = array.new_int(0)
+var fractal_lows = array.new_float(0)
+var fractal_low_bars = array.new_int(0)
+
+if isFractalHigh
+    fractal_highs.push(high[fracOff])
+    fractal_high_bars.push(bar_index - fracOff)
+
+if isFractalLow
+    fractal_lows.push(low[fracOff])
+    fractal_low_bars.push(bar_index - fracOff)
+
+// ----- Order blocks -----
+var ob_line1 = array.new<line>()
+var ob_line2 = array.new<line>()
+var ob_line3 = array.new<line>()
+var ob_line4 = array.new<line>()
+
+// Bearish: a fractal low is broken, take the highest bullish candle since the fractal
+if fractal_lows.size() > 0
+    for i = fractal_lows.size() - 1 to 0
+        if (findObType == "Close" ? close : low) < fractal_lows.get(i)
+            int idx = 0
+            float maxHigh = low
+            int gapIndex = 0
+            int fBar = fractal_low_bars.get(i)
+
+            for k = 0 to bars_back
+                if bar_index - k < fBar
+                    break
+                bearishGap = close[k + 1] < low[k + 2] and high[k] < low[k + 2]
+
+                if close[k] > open[k] and high[k] > maxHigh
+                    idx := k
+                    maxHigh := high[k]
+
+                if bearishGap and high[k] > maxHigh
+                    gapIndex := k + 2
+
+            fvgOk = not filterFvgs or (gapIndex > 0 and idx - gapIndex >= 0 and idx - gapIndex <= fvgDistance)
+            if idx != 0 and fvgOk
+                x1 = bar_index - idx
+                xEnd = x1 + ob_line_length
+                loc = lineHeight == "Body" ? open[idx] : low[idx]
+                ob_line1.push(line.new(x1, high[idx], xEnd, high[idx], xloc = xloc.bar_index, style = ob_lineStyle, color = bear_line_color, width = ob_linesWidth))
+                ob_line2.push(line.new(x1, loc, xEnd, loc, xloc = xloc.bar_index, style = ob_lineStyle, color = bear_line_color, width = ob_linesWidth))
+
+            fractal_lows.remove(i)
+            fractal_low_bars.remove(i)
+
+// Bullish: a fractal high is broken, take the lowest bearish candle since the fractal
+if fractal_highs.size() > 0
+    for i = fractal_highs.size() - 1 to 0
+        if (findObType == "Close" ? close : high) > fractal_highs.get(i)
+            int idx = 0
+            float minLow = low
+            int gapIndex = 0
+            int fBar = fractal_high_bars.get(i)
+
+            for k = 0 to bars_back
+                if bar_index - k < fBar
+                    break
+                bullishGap = close[k + 1] > high[k + 2] and low[k] > high[k + 2]
+
+                if close[k] < open[k] and low[k] < minLow
+                    idx := k
+                    minLow := low[k]
+
+                if bullishGap
+                    gapIndex := k + 2
+
+            fvgOk = not filterFvgs or (gapIndex > 0 and idx - gapIndex >= 0 and idx - gapIndex <= fvgDistance)
+            if idx != 0 and fvgOk
+                x1 = bar_index - idx
+                xEnd = x1 + ob_line_length
+                loc = lineHeight == "Body" ? open[idx] : high[idx]
+                ob_line3.push(line.new(x1, low[idx], xEnd, low[idx], xloc = xloc.bar_index, style = ob_lineStyle, color = bull_line_color, width = ob_linesWidth))
+                ob_line4.push(line.new(x1, loc, xEnd, loc, xloc = xloc.bar_index, style = ob_lineStyle, color = bull_line_color, width = ob_linesWidth))
+
+            fractal_highs.remove(i)
+            fractal_high_bars.remove(i)
+
+// ----- Remove filled order blocks -----
+if ob_line1.size() > 0
+    for i = ob_line1.size() - 1 to 0
+        if high >= ob_line1.get(i).get_y1() and high >= ob_line2.get(i).get_y1()
+            if delLines
+                ob_line1.get(i).delete()
+                ob_line2.get(i).delete()
+            ob_line1.remove(i)
+            ob_line2.remove(i)
+
+if ob_line3.size() > 0
+    for i = ob_line3.size() - 1 to 0
+        if low <= ob_line3.get(i).get_y1() and low <= ob_line4.get(i).get_y1()
+            if delLines
+                ob_line3.get(i).delete()
+                ob_line4.get(i).delete()
+            ob_line3.remove(i)
+            ob_line4.remove(i)
+
+plotshape(showFractals and isFractalHigh, "Fractal High", style = shape.triangledown, location = location.abovebar, color = color.red, offset = -fracOff, size = size.auto)
+plotshape(showFractals and isFractalLow, "Fractal Low", style = shape.triangleup, location = location.belowbar, color = color.blue, offset = -fracOff, size = size.auto)
