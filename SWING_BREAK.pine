@@ -9,6 +9,7 @@ lbL = input.int(5, title="Swing Left Bars (นับซ้ายของ Pivot)
 lbR = input.int(5, title="Swing Right Bars (นับขวา = แท่งรอ Confirm)", minval=1, maxval=50, group="1. Swing", tooltip="จำนวนแท่งฝั่งขวาที่ต้องรอก่อน Swing High / Swing Low ถูก confirm\nยิ่งน้อย Swing เกิดเร็ว แต่ Pivot หลอกมากขึ้น", display=display.none)
 
 // --- 2. Swing Break (Entry / SL / TP) --- ค่าชั่วคราว รอกำหนดกฎ entry จริง
+slPct         = input.float(100.0, title="  SL = กี่ % ของระยะ Entry→Swing ฝั่งตรงข้าม", minval=1.0, maxval=1000.0, step=1.0, group="2. Swing Break (Entry/SL/TP)", display=display.none, tooltip="100 = SL ที่ Swing ฝั่งตรงข้าม (± buffer)\n50 = SL ครึ่งหนึ่งของระยะนั้น (ใกล้ Entry ขึ้น)\nTP คิดจากระยะ SL ที่ปรับแล้ว (tpRR × ระยะ SL)")
 slBufferPts   = input.float(0.0, title="  SL buffer (จุดราคา) นอก Swing ฝั่งตรงข้าม", minval=0.0, step=0.01, group="2. Swing Break (Entry/SL/TP)", display=display.none)
 tpRR          = input.float(2.0, title="  TP (เท่าของระยะ SL)", minval=0.1, step=0.1, group="2. Swing Break (Entry/SL/TP)", display=display.none, tooltip="2.0 = TP ไกล 2 เท่าของระยะ Entry→SL")
 inBarTP        = input.bool(true, title="  TP ในแท่งเดียวกับที่เปิดออเดอร์ (แท่งทิศเดียวกับออเดอร์)", group="2. Swing Break (Entry/SL/TP)", display=display.none, tooltip="SELL: แท่งขาลง (close<open) และ low ถึง TP = ชนะในแท่งเดียวกัน (BUY กลับด้าน)\nแท่งที่ชนทั้ง TP และ SL ให้ทิศแท่งตัดสิน: ทิศเดียวกับออเดอร์ = TP")
@@ -367,8 +368,8 @@ bool dayOK    = array.get(array.from(tradeSun, tradeMon, tradeTue, tradeWed, tra
 if dayOK and not swHUsed and not na(lastSwL) and high > lastSwH
     swHUsed := true
     float fillB = lastSwH
-    float slB   = lastSwL - slBufferPts
-    float distB = fillB - slB
+    float distB = (fillB - (lastSwL - slBufferPts)) * slPct / 100.0
+    float slB   = fillB - distB
     if distB > 0
         float tpB = fillB + tpRR * distB
         entryPrice    := fillB
@@ -403,8 +404,8 @@ if dayOK and not swHUsed and not na(lastSwL) and high > lastSwH
 if dayOK and not swLUsed and not na(lastSwH) and low < lastSwL
     swLUsed := true
     float fillS = lastSwL
-    float slS   = lastSwH + slBufferPts
-    float distS = slS - fillS
+    float distS = ((lastSwH + slBufferPts) - fillS) * slPct / 100.0
+    float slS   = fillS + distS
     if distS > 0
         float tpS = fillS - tpRR * distS
         entryPrice    := fillS
@@ -1415,8 +1416,8 @@ f_drawSettings() =>
     f_ut(tSet, 2, 1, rowIdx, "ทันทีที่ราคาทะลุ", lxCyan, size.tiny, rowBg, text.align_right)
     rowIdx += 1
     rowBg := rowIdx % 2 == 1 ? lxRowA : lxRowB
-    f_ut(tSet, 2, 0, rowIdx, "SL buffer / TP (R)", lxMuted, size.tiny, rowBg, text.align_left)
-    f_ut(tSet, 2, 1, rowIdx, str.tostring(slBufferPts, "#.##") + " / " + str.tostring(tpRR, "#.##") + "R", lxCyan, size.tiny, rowBg, text.align_right)
+    f_ut(tSet, 2, 0, rowIdx, "SL % / TP (R)", lxMuted, size.tiny, rowBg, text.align_left)
+    f_ut(tSet, 2, 1, rowIdx, str.tostring(slPct, "#.##") + "% / " + str.tostring(tpRR, "#.##") + "R", lxCyan, size.tiny, rowBg, text.align_right)
     rowIdx += 1
 
     f_ut(tSet, 2, 0, rowIdx, "─── Risk ───", lxColHd, size.tiny, lxSubBg, text.align_left)
