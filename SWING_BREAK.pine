@@ -339,9 +339,11 @@ f_notify(string _evt, bool _isBuy, string _lv, float _ent, float _sl, float _tp,
 // ==========================================
 // --- 4.4 SWING BREAK ENTRY (ชั่วคราว: รอกำหนดกฎ entry จริง) ---
 // ==========================================
-// BUY : ราคาเบรค Swing High ล่าสุดที่ confirm แล้ว → SL ใต้ Swing Low ล่าสุด (− buffer), TP = tpRR × ระยะ SL
-// SELL: ราคาเบรค Swing Low ล่าสุดที่ confirm แล้ว → SL เหนือ Swing High ล่าสุด (+ buffer)
-// Swing แต่ละจุดเบรคได้ครั้งเดียว จนกว่า Pivot ใหม่ฝั่งเดียวกันจะ confirm
+// BUY : Swing High confirm แล้ว → ราคาเบรค High นั้น "ก่อน" ที่ Swing Low ตัวใหม่จะ confirm → BUY
+//       ถ้า Swing Low confirm ก่อนเบรค = setup BUY ถูกยกเลิก (รอ Swing High ใหม่)
+// SELL: กลับด้าน — Swing Low confirm แล้ว → เบรค Low นั้นก่อน Swing High ตัวใหม่ confirm → SELL
+// SL ใต้/เหนือ Swing ฝั่งตรงข้ามล่าสุด (± buffer), TP = tpRR × ระยะ SL (ชั่วคราว รอกำหนด)
+// Swing แต่ละจุดเบรคได้ครั้งเดียว (swHUsed / swLUsed = true คือไม่มี setup รออยู่)
 var float lastSwH    = na
 var float lastSwL    = na
 var int   lastSwHBar = na
@@ -352,11 +354,13 @@ var bool  swLUsed    = true
 if not na(fracHighVal)
     lastSwH    := fracHighVal
     lastSwHBar := bar_index - lbR
-    swHUsed    := false
+    swHUsed    := false   // arm BUY
+    swLUsed    := true    // High confirm ก่อนเบรค Low = ยกเลิก setup SELL
 if not na(fracLowVal)
     lastSwL    := fracLowVal
     lastSwLBar := bar_index - lbR
-    swLUsed    := false
+    swLUsed    := false   // arm SELL
+    swHUsed    := true    // Low confirm ก่อนเบรค High = ยกเลิก setup BUY
 
 bool dayOK    = array.get(array.from(tradeSun, tradeMon, tradeTue, tradeWed, tradeThu, tradeFri, tradeSat), dayofweek(time, tz) - 1)
 bool brkClose = brkMode == "Close"
