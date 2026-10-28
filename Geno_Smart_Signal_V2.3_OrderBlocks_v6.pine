@@ -236,6 +236,7 @@ method initialize(point[] zigzag, startUp setup, int direction, int maxSize = 10
     zigzag.unshift(setup.dirVariables(direction))
     if zigzag.size() > maxSize
         zigzag.pop()
+    true
 
 method update(point[] zigzag, startUp setup, int direction, int maxSize = 10) =>
     if zigzag.size() == 0
@@ -246,6 +247,7 @@ method update(point[] zigzag, startUp setup, int direction, int maxSize = 10) =>
         dirLess = direction == -1 and newPoint.y < zigzag.get(0).y
         if dirOver or dirLess
             zigzag.set(0, newPoint)
+        true
 
 method boolPoint(point[] zigzag, point[] oldzigzag) =>
     boolOr = zigzag.get(0).x != oldzigzag.get(0).x or zigzag.get(0).y != oldzigzag.get(0).y
