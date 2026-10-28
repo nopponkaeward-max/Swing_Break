@@ -10,7 +10,7 @@ lbR = input.int(5, title="Swing Right Bars (นับขวา = แท่งร
 
 // --- 2. Swing Break → Retest 50% (Entry / SL / TP) ---
 brkMode       = input.string("ทันทีที่ราคาทะลุ (Intrabar)", "รูปแบบ Entry", options=["ทันทีที่ราคาทะลุ (Intrabar)", "รอแท่งปิด (Bar Close)"], group="2. Swing Break (Entry/SL/TP)", display=display.none, tooltip="Intrabar = เปิดทันทีที่ราคาแตะระดับ 50% ของ retest, Entry อยู่ที่ระดับ 50% พอดี (repaint ระหว่างแท่ง)\nBar Close = ไส้แท่งแตะระดับ 50% (ไม่สนว่าแท่งจะปิดฝั่งไหนของระดับ) แล้วรอแท่งปิด เปิดที่ราคาปิด — ไม่ repaint, สถิติใกล้เคียงการเทรดจริงกว่า (ไม่เช็ค TP/SL ในแท่งที่เปิด)")
-slPct         = input.float(100.0, title="  SL = กี่ % ของระยะ Entry→Low ก่อนเบรค (BUY) / High ก่อนเบรค (SELL)", minval=1.0, maxval=1000.0, step=1.0, group="2. Swing Break (Entry/SL/TP)", display=display.none, tooltip="SELL (หลังเบรค High): ระยะ = BUY (หลังเบรค High): ระยะ = Entry ถึง Low ต่ำสุดก่อนเบรค (SELL กลับด้าน: High ก่อนเบรค)\n100 = SL ที่จุดนั้น (± buffer)\n50 = SL ครึ่งหนึ่งของระยะนั้น (ใกล้ Entry ขึ้น)\nTP = High mark (SELL: Low mark) ไม่ขึ้นกับ %")
+slPct         = input.float(100.0, title="  SL = กี่ % ของระยะ Entry→Swing Low ล่าสุด (BUY) / Swing High ล่าสุด (SELL)", minval=1.0, maxval=1000.0, step=1.0, group="2. Swing Break (Entry/SL/TP)", display=display.none, tooltip="SELL (หลังเบรค High): ระยะ = BUY: ระยะ = Entry ถึง Swing Low ที่ confirm ล่าสุด (SELL กลับด้าน: Swing High ล่าสุด)\n100 = SL ที่ Swing นั้นพอดี (± buffer) (± buffer)\n50 = SL ครึ่งหนึ่งของระยะนั้น (ใกล้ Entry ขึ้น)\nTP = High mark (SELL: Low mark) ไม่ขึ้นกับ %")
 slBufferPts   = input.float(0.0, title="  SL buffer (จุดราคา) นอกจุดสุดขั้วหลังเบรค", minval=0.0, step=0.01, group="2. Swing Break (Entry/SL/TP)", display=display.none)
 inBarTP        = input.bool(true, title="  TP ในแท่งเดียวกับที่เปิดออเดอร์ (แท่งทิศเดียวกับออเดอร์)", group="2. Swing Break (Entry/SL/TP)", display=display.none, tooltip="SELL: แท่งขาลง (close<open) และ low ถึง TP = ชนะในแท่งเดียวกัน (BUY กลับด้าน)\nแท่งที่ชนทั้ง TP และ SL ให้ทิศแท่งตัดสิน: ทิศเดียวกับออเดอร์ = TP")
 inBarSL        = input.bool(true, title="  SL ในแท่งเดียวกับที่เปิดออเดอร์ (แท่งใหญ่ตรงข้ามออเดอร์)", group="2. Swing Break (Entry/SL/TP)", display=display.none, tooltip="SELL: แท่งขาขึ้น (close>open) และ high ถึง SL = แพ้ในแท่งเดียวกัน (BUY กลับด้าน)\nแท่งที่ชนทั้ง TP และ SL ให้ทิศแท่งตัดสิน: ตรงข้ามออเดอร์ = SL")
@@ -344,7 +344,7 @@ f_notify(string _evt, bool _isBuy, string _lv, float _ent, float _sl, float _tp,
 //    → ล็อก High สูงสุดตั้งแต่เบรคถึงตอนนี้เป็น "Top"
 // 3) ช่วงวัด = Top → Low ต่ำสุด "ก่อนเบรค" (แท่ง Swing High ถึงแท่งก่อนเบรค) ; 50% = กึ่งกลางช่วง
 // 4) ราคาวิ่งลงมาแตะ 50% (แท่งหลังแท่งที่ล็อก Top) → เปิด BUY (ทิศเดิมหลังเบรค) ที่ 50%
-//    SL ใต้ Low ก่อนเบรค (± buffer) × slPct, TP = Top (High mark)
+//    SL ที่ Swing Low ที่ confirm ล่าสุด (− buffer) × slPct, TP = Top (High mark)
 // 5) ถ้ามี Swing High หรือ Swing Low ใหม่ confirm (ชนิดไหนก็ได้) ก่อนราคาแตะ 50% → ยกเลิก setup ที่รออยู่ทั้งสองฝั่ง
 // ฝั่งกลับด้าน: เบรค Swing Low → ล็อก Bottom → ราคาขึ้นแตะ 50% → SELL, SL เหนือ High ก่อนเบรค, TP = Bottom
 var float lastSwH    = na
@@ -459,11 +459,11 @@ if lWait and not lTopSet and bar_index > lBrkBar
             regLine(line.new(lSwBar, lMid, bar_index + 10, lMid, color=color.new(color.orange, 20), width=1, style=line.style_dotted))
 
 // --- BUY (ทิศเดิมหลังเบรค High): ราคาย้อนลงมาแตะ 50% ของช่วง High mark → Low ก่อนเบรค ---
-//     SL ใต้ Low ก่อนเบรค (± buffer) × slPct, TP = High mark
+//     SL ที่ Swing Low ที่ confirm ล่าสุด (− buffer) × slPct, TP = High mark
 if hWait and hTopSet and bar_index > hLockBar and low <= hMid and (not brkClose or barstate.isconfirmed)
     hWait := false
     float fillB = brkClose ? close : math.min(open, hMid)
-    float distB = (fillB - (hBase - slBufferPts)) * slPct / 100.0
+    float distB = na(lastSwL) ? 0.0 : (fillB - (lastSwL - slBufferPts)) * slPct / 100.0
     float tpB   = hPeak
     if dayOK and distB > 0 and tpB > fillB
         float slB = fillB - distB
@@ -494,11 +494,11 @@ if hWait and hTopSet and bar_index > hLockBar and low <= hMid and (not brkClose 
         f_drawEntryMarker(true, fillB, tpB, slB, "Retest 50% ↑")
 
 // --- SELL (ทิศเดิมหลังเบรค Low): ราคาย้อนขึ้นมาแตะ 50% ของช่วง Low mark → High ก่อนเบรค ---
-//     SL เหนือ High ก่อนเบรค (± buffer) × slPct, TP = Low mark
+//     SL ที่ Swing High ที่ confirm ล่าสุด (+ buffer) × slPct, TP = Low mark
 if lWait and lTopSet and bar_index > lLockBar and high >= lMid and (not brkClose or barstate.isconfirmed)
     lWait := false
     float fillS = brkClose ? close : math.max(open, lMid)
-    float distS = ((lBase + slBufferPts) - fillS) * slPct / 100.0
+    float distS = na(lastSwH) ? 0.0 : ((lastSwH + slBufferPts) - fillS) * slPct / 100.0
     float tpS   = lPeak
     if dayOK and distS > 0 and tpS < fillS
         float slS = fillS + distS
