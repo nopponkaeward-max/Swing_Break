@@ -10,9 +10,8 @@ lbR = input.int(5, title="Swing Right Bars (นับขวา = แท่งร
 
 // --- 2. Swing Break → Retest 50% (Entry / SL / TP) ---
 brkMode       = input.string("ทันทีที่ราคาทะลุ (Intrabar)", "รูปแบบ Entry", options=["ทันทีที่ราคาทะลุ (Intrabar)", "รอแท่งปิด (Bar Close)"], group="2. Swing Break (Entry/SL/TP)", display=display.none, tooltip="Intrabar = เปิดทันทีที่ราคาแตะระดับ 50% ของ retest, Entry อยู่ที่ระดับ 50% พอดี (repaint ระหว่างแท่ง)\nBar Close = ไส้แท่งแตะระดับ 50% (ไม่สนว่าแท่งจะปิดฝั่งไหนของระดับ) แล้วรอแท่งปิด เปิดที่ราคาปิด — ไม่ repaint, สถิติใกล้เคียงการเทรดจริงกว่า (ไม่เช็ค TP/SL ในแท่งที่เปิด)")
-slPct         = input.float(100.0, title="  SL = กี่ % ของระยะ Entry→Swing ที่ถูกเบรค", minval=1.0, maxval=1000.0, step=1.0, group="2. Swing Break (Entry/SL/TP)", display=display.none, tooltip="SELL (หลังเบรค High): ระยะ = Entry ถึง Swing High ที่ถูกเบรค (BUY กลับด้าน)\n100 = SL ที่ Swing นั้น (± buffer)\n50 = SL ครึ่งหนึ่งของระยะนั้น (ใกล้ Entry ขึ้น)\nTP คิดจากระยะ SL ที่ปรับแล้ว (tpRR × ระยะ SL)")
+slPct         = input.float(100.0, title="  SL = กี่ % ของระยะ Entry→High สูงสุดหลังเบรค (SELL) / Low ต่ำสุดหลังเบรค (BUY)", minval=1.0, maxval=1000.0, step=1.0, group="2. Swing Break (Entry/SL/TP)", display=display.none, tooltip="SELL (หลังเบรค High): ระยะ = Entry ถึง Swing High ที่ถูกเบรค (BUY กลับด้าน)\n100 = SL ที่ Swing นั้น (± buffer)\n50 = SL ครึ่งหนึ่งของระยะนั้น (ใกล้ Entry ขึ้น)\nTP คิดจากระยะ SL ที่ปรับแล้ว (tpRR × ระยะ SL)")
 slBufferPts   = input.float(0.0, title="  SL buffer (จุดราคา) นอก Swing ที่ถูกเบรค", minval=0.0, step=0.01, group="2. Swing Break (Entry/SL/TP)", display=display.none)
-tpRR          = input.float(2.0, title="  TP (เท่าของระยะ SL)", minval=0.1, step=0.1, group="2. Swing Break (Entry/SL/TP)", display=display.none, tooltip="2.0 = TP ไกล 2 เท่าของระยะ Entry→SL")
 inBarTP        = input.bool(true, title="  TP ในแท่งเดียวกับที่เปิดออเดอร์ (แท่งทิศเดียวกับออเดอร์)", group="2. Swing Break (Entry/SL/TP)", display=display.none, tooltip="SELL: แท่งขาลง (close<open) และ low ถึง TP = ชนะในแท่งเดียวกัน (BUY กลับด้าน)\nแท่งที่ชนทั้ง TP และ SL ให้ทิศแท่งตัดสิน: ทิศเดียวกับออเดอร์ = TP")
 inBarSL        = input.bool(true, title="  SL ในแท่งเดียวกับที่เปิดออเดอร์ (แท่งใหญ่ตรงข้ามออเดอร์)", group="2. Swing Break (Entry/SL/TP)", display=display.none, tooltip="SELL: แท่งขาขึ้น (close>open) และ high ถึง SL = แพ้ในแท่งเดียวกัน (BUY กลับด้าน)\nแท่งที่ชนทั้ง TP และ SL ให้ทิศแท่งตัดสิน: ตรงข้ามออเดอร์ = SL")
 
@@ -343,7 +342,7 @@ f_notify(string _evt, bool _isBuy, string _lv, float _ent, float _sl, float _tp,
 // 1) Swing High confirm แล้วราคาเบรค High นั้น (ก่อน Swing Low ใหม่ confirm) → "ไม่เข้า" ตอนเบรค
 // 2) วัดช่วง: Low ต่ำสุดตั้งแต่แท่ง Swing High ถึงแท่งที่เบรค → ระดับ Swing High ที่ถูกเบรค ; 50% = จุดกึ่งกลางช่วงนี้
 // 3) รอราคาวิ่งกลับลงมาแตะระดับ 50% (แท่งหลังแท่งเบรค) → เปิด SELL ที่ระดับ 50%
-//    SL เหนือ Swing High ที่ถูกเบรค (± buffer) × slPct, TP = tpRR × ระยะ SL
+//    SL เหนือ High สูงสุดหลังเบรค (± buffer) × slPct, TP = Low (Swing Low) ล่าสุดก่อนเกิด High
 // 4) ถ้า Swing High ใหม่ confirm ก่อนราคาย้อนมาแตะ 50% → ยกเลิก setup
 // ฝั่งกลับด้าน: เบรค Swing Low → รอราคาขึ้นมาแตะ 50% ของช่วง (High สูงสุด → Swing Low) → เปิด BUY, ยกเลิกเมื่อ Swing Low ใหม่ confirm
 var float lastSwH    = na
@@ -355,9 +354,13 @@ var bool  swLUsed    = true
 var bool  hWait      = false  // เบรค High แล้ว รอ retest 50% เพื่อ SELL
 var bool  lWait      = false  // เบรค Low แล้ว รอ retest 50% เพื่อ BUY
 var float hLvl       = na
+var float hPeak      = na   // High สูงสุดหลังเบรค
+var float hTP        = na   // Swing Low ล่าสุดก่อนเกิด High
 var float hMid       = na
 var int   hBrkBar    = na
 var float lLvl       = na
+var float lPeak      = na   // Low ต่ำสุดหลังเบรค
+var float lTP        = na   // Swing High ล่าสุดก่อนเกิด Low
 var float lMid       = na
 var int   lBrkBar    = na
 
@@ -385,6 +388,8 @@ if not swHUsed and high > lastSwH
         refLowB := math.min(refLowB, low[k])
     hWait   := true
     hLvl    := lastSwH
+    hPeak   := high
+    hTP     := lastSwL
     hMid    := refLowB + 0.5 * (lastSwH - refLowB)
     hBrkBar := bar_index
     if showBreakLine
@@ -399,6 +404,8 @@ if not swLUsed and low < lastSwL
         refHighS := math.max(refHighS, high[k])
     lWait   := true
     lLvl    := lastSwL
+    lPeak   := low
+    lTP     := lastSwH
     lMid    := refHighS - 0.5 * (refHighS - lastSwL)
     lBrkBar := bar_index
     if showBreakLine
@@ -409,10 +416,11 @@ if not swLUsed and low < lastSwL
 if hWait and bar_index > hBrkBar and low <= hMid and (not brkClose or barstate.isconfirmed)
     hWait := false
     float fillS = brkClose ? close : math.min(open, hMid)
-    float distS = ((hLvl + slBufferPts) - fillS) * slPct / 100.0
-    if dayOK and distS > 0
+    float peakH = brkClose ? math.max(hPeak, high) : hPeak
+    float distS = ((peakH + slBufferPts) - fillS) * slPct / 100.0
+    float tpS   = hTP
+    if dayOK and distS > 0 and not na(tpS) and tpS < fillS
         float slS = fillS + distS
-        float tpS = fillS - tpRR * distS
         entryPrice    := fillS
         slPrice       := slS
         tpPrice       := tpS
@@ -426,7 +434,7 @@ if hWait and bar_index > hBrkBar and low <= hMid and (not brkClose or barstate.i
         array.push(tTP,        tpS)
         array.push(tBarIdx,    bar_index)
         array.push(tRiskAmt,   riskAmount)
-        array.push(tRRRatio,   tpRR)
+        array.push(tRRRatio,   (fillS - tpS) / distS)
         array.push(tTriggerPx, hMid)
         array.push(tPipsDist,  distS)
         f_notify("entry", false, "Retest 50%", fillS, slS, tpS, calculatedLot, 0.0, 0.0, false)
@@ -443,10 +451,11 @@ if hWait and bar_index > hBrkBar and low <= hMid and (not brkClose or barstate.i
 if lWait and bar_index > lBrkBar and high >= lMid and (not brkClose or barstate.isconfirmed)
     lWait := false
     float fillB = brkClose ? close : math.max(open, lMid)
-    float distB = (fillB - (lLvl - slBufferPts)) * slPct / 100.0
-    if dayOK and distB > 0
+    float peakL = brkClose ? math.min(lPeak, low) : lPeak
+    float distB = (fillB - (peakL - slBufferPts)) * slPct / 100.0
+    float tpB   = lTP
+    if dayOK and distB > 0 and not na(tpB) and tpB > fillB
         float slB = fillB - distB
-        float tpB = fillB + tpRR * distB
         entryPrice    := fillB
         slPrice       := slB
         tpPrice       := tpB
@@ -460,7 +469,7 @@ if lWait and bar_index > lBrkBar and high >= lMid and (not brkClose or barstate.
         array.push(tTP,        tpB)
         array.push(tBarIdx,    bar_index)
         array.push(tRiskAmt,   riskAmount)
-        array.push(tRRRatio,   tpRR)
+        array.push(tRRRatio,   (tpB - fillB) / distB)
         array.push(tTriggerPx, lMid)
         array.push(tPipsDist,  distB)
         f_notify("entry", true, "Retest 50%", fillB, slB, tpB, calculatedLot, 0.0, 0.0, false)
@@ -472,6 +481,12 @@ if lWait and bar_index > lBrkBar and high >= lMid and (not brkClose or barstate.
             lnB := line.new(x1=bar_index, y1=fillB, x2=bar_index+1, y2=fillB, color=color.new(color.orange, 30), width=2, style=line.style_solid)
         array.push(tEntryLine, lnB)
         f_drawEntryMarker(true, fillB, tpB, slB, "Retest 50% ↑")
+
+// --- อัปเดตจุดสุดขั้วหลังเบรค (ใช้คิด SL ของแท่งถัดไป) ---
+if hWait
+    hPeak := math.max(hPeak, high)
+if lWait
+    lPeak := math.min(lPeak, low)
 
 // ==========================================
 // --- 4.7 EXTEND ENTRY LINES (ต่อยาวทุก bar) ---
@@ -919,7 +934,7 @@ f_drawMain() =>
     string revStr = "Break → Retest 50%"
 
     f_ut(tMain, 0, 0, 0, "◆   SWING_BREAK STATS", lxTitleTx, size.small, lxHeadBg)
-    f_ut(tMain, 0, 0, 1, periodStr + "  ·  TP " + str.tostring(tpRR, "#.##") + "R", lxMuted, size.tiny, lxSubBg)
+    f_ut(tMain, 0, 0, 1, periodStr + "  ·  TP @ Swing ก่อนเกิด High/Low", lxMuted, size.tiny, lxSubBg)
 
     f_ut(tMain, 0, 0, 2, "Entry", lxMuted, size.tiny, lxRowA, text.align_left)
     f_ut(tMain, 0, 1, 2, revStr, lxCyan, size.small, lxRowA, text.align_right)
@@ -1453,8 +1468,8 @@ f_drawSettings() =>
     f_ut(tSet, 2, 1, rowIdx, (brkClose ? "รอแท่งปิด" : "ทันทีที่ราคาทะลุ"), lxCyan, size.tiny, rowBg, text.align_right)
     rowIdx += 1
     rowBg := rowIdx % 2 == 1 ? lxRowA : lxRowB
-    f_ut(tSet, 2, 0, rowIdx, "SL % / TP (R)", lxMuted, size.tiny, rowBg, text.align_left)
-    f_ut(tSet, 2, 1, rowIdx, str.tostring(slPct, "#.##") + "% / " + str.tostring(tpRR, "#.##") + "R", lxCyan, size.tiny, rowBg, text.align_right)
+    f_ut(tSet, 2, 0, rowIdx, "SL % / TP", lxMuted, size.tiny, rowBg, text.align_left)
+    f_ut(tSet, 2, 1, rowIdx, str.tostring(slPct, "#.##") + "% / Swing ก่อนหน้า", lxCyan, size.tiny, rowBg, text.align_right)
     rowIdx += 1
 
     f_ut(tSet, 2, 0, rowIdx, "─── Risk ───", lxColHd, size.tiny, lxSubBg, text.align_left)
