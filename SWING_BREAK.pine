@@ -9,7 +9,7 @@ lbL = input.int(5, title="Swing Left Bars (นับซ้ายของ Pivot)
 lbR = input.int(5, title="Swing Right Bars (นับขวา = แท่งรอ Confirm)", minval=1, maxval=50, group="1. Swing", tooltip="จำนวนแท่งฝั่งขวาที่ต้องรอก่อน Swing High / Swing Low ถูก confirm\nยิ่งน้อย Swing เกิดเร็ว แต่ Pivot หลอกมากขึ้น", display=display.none)
 
 // --- 2. Swing Break (Entry / SL / TP) --- ค่าชั่วคราว รอกำหนดกฎ entry จริง
-brkMode       = input.string("Close", "เงื่อนไขเบรค Swing", options=["Close", "High/Low"], group="2. Swing Break (Entry/SL/TP)", display=display.none, tooltip="Close = เปิดออเดอร์เมื่อแท่งปิดเหนือ/ใต้ Swing (Entry = ราคาปิด)\nHigh/Low = เปิดทันทีที่ไส้แท่งทะลุ Swing (Entry = ระดับ Swing หรือราคาเปิดถ้า gap) — repaint ระหว่างแท่ง")
+brkMode       = input.string("Close", "เงื่อนไขเบรค Swing", options=["Close", "High/Low"], group="2. Swing Break (Entry/SL/TP)", display=display.none, tooltip="Entry อยู่ที่ระดับ Swing ที่เบรคพอดีทุกโหมด\nClose = ยืนยันเบรคเมื่อแท่งปิดเหนือ/ใต้ Swing\nHigh/Low = ยืนยันทันทีที่ไส้แท่งทะลุ Swing — repaint ระหว่างแท่ง")
 slBufferPts   = input.float(0.0, title="  SL buffer (จุดราคา) นอก Swing ฝั่งตรงข้าม", minval=0.0, step=0.01, group="2. Swing Break (Entry/SL/TP)", display=display.none)
 tpRR          = input.float(2.0, title="  TP (เท่าของระยะ SL)", minval=0.1, step=0.1, group="2. Swing Break (Entry/SL/TP)", display=display.none, tooltip="2.0 = TP ไกล 2 เท่าของระยะ Entry→SL")
 inBarTP        = input.bool(true, title="  TP ในแท่งเดียวกับที่เปิดออเดอร์ (แท่งทิศเดียวกับออเดอร์)", group="2. Swing Break (Entry/SL/TP)", display=display.none, tooltip="SELL: แท่งขาลง (close<open) และ low ถึง TP = ชนะในแท่งเดียวกัน (BUY กลับด้าน)\nแท่งที่ชนทั้ง TP และ SL ให้ทิศแท่งตัดสิน: ทิศเดียวกับออเดอร์ = TP")
@@ -368,7 +368,7 @@ bool brkClose = brkMode == "Close"
 // --- BUY: เบรค Swing High ---
 if dayOK and not swHUsed and not na(lastSwL) and (brkClose ? close > lastSwH : high > lastSwH)
     swHUsed := true
-    float fillB = brkClose ? close : math.max(open, lastSwH)
+    float fillB = lastSwH
     float slB   = lastSwL - slBufferPts
     float distB = fillB - slB
     if distB > 0
@@ -404,7 +404,7 @@ if dayOK and not swHUsed and not na(lastSwL) and (brkClose ? close > lastSwH : h
 // --- SELL: เบรค Swing Low ---
 if dayOK and not swLUsed and not na(lastSwH) and (brkClose ? close < lastSwL : low < lastSwL)
     swLUsed := true
-    float fillS = brkClose ? close : math.min(open, lastSwL)
+    float fillS = lastSwL
     float slS   = lastSwH + slBufferPts
     float distS = slS - fillS
     if distS > 0
